@@ -23,6 +23,10 @@ jobs:
         with:
           base: ${{ github.ref_name }}
           filters: |
+            amazon-cloudwatch-agent:
+              - 'scripts/package-build/amazon-cloudwatch-agent/**'
+            amazon-ssm-agent:
+              - 'scripts/package-build/amazon-ssm-agent/**'
             aws-gwlbtun:
               - 'scripts/package-build/aws-gwlbtun/**'
             ddclient:
@@ -99,6 +103,14 @@ jobs:
           }
 
           # Trigger builds based on detected changes
+          if [ "${{ steps.changes.outputs.amazon-cloudwatch-agent }}" == "true" ]; then
+            trigger_build "amazon-cloudwatch-agent"
+          fi
+
+          if [ "${{ steps.changes.outputs.amazon-ssm-agent }}" == "true" ]; then
+            trigger_build "amazon-ssm-agent"
+          fi
+
           if [ "${{ steps.changes.outputs.aws-gwlbtun }}" == "true" ]; then
             trigger_build "aws-gwlbtun"
           fi
