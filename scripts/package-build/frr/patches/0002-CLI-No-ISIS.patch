@@ -1,0 +1,80 @@
+From 777498a9df170a457cf63b03527bcf2fafdfd5e3 Mon Sep 17 00:00:00 2001
+From: Yaroslav Kholod <y.kholod@vyos.io>
+Date: Wed, 18 Dec 2024 11:44:18 +0200
+Subject: [PATCH] 10133 and #17472: Ignore no ISIS command after no ipX router
+ ISIS
+
+---
+ tools/frr-reload.py | 42 ++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 42 insertions(+)
+
+diff --git a/tools/frr-reload.py b/tools/frr-reload.py
+index 08a1f1e07..32ec44fea 100755
+--- a/tools/frr-reload.py
++++ b/tools/frr-reload.py
+@@ -38,6 +38,11 @@ class VtyshException(Exception):
+     pass
+ 
+ 
++class StaticVariables:
++    no_ip_router_isis = False
++    no_ipv6_router_isis = False
++
++
+ class Vtysh(object):
+     def __init__(self, bindir=None, confdir=None, sockdir=None, pathspace=None):
+         self.bindir = bindir
+@@ -1966,6 +1971,38 @@ def compare_context_objects(newconf, running):
+     return (lines_to_add, lines_to_del)
+ 
+ 
++def vyos_no_isis_processing(cmd):
++    """
++    Makes frr-reload.py to ignore all no ISIS commands after both ip router isis
++    and ipv6 router isis are deleted from the interface.
++    """
++    new_cmd = cmd
++
++    if ("interface" in cmd):
++        StaticVariables.no_ip_router_isis = False
++        StaticVariables.no_ipv6_router_isis = False
++
++    if ("ip router isis" in cmd):
++        StaticVariables.no_ip_router_isis = False
++    if ("ipv6 router isis" in cmd):
++        StaticVariables.no_ipv6_router_isis = False
++
++    if ("no ip router isis" in cmd):
++        StaticVariables.no_ip_router_isis = True
++        return new_cmd
++    if ("no ipv6 router isis" in cmd):
++        StaticVariables.no_ipv6_router_isis = True
++        return new_cmd
++
++    # Ignore all commands that have "no" and "isis" in them
++    if (StaticVariables.no_ip_router_isis and StaticVariables.no_ipv6_router_isis):
++        if ("no" in cmd) and ("isis" in cmd):
++            log.info("VYoS makes config to ignore %s instruction", cmd)
++            new_cmd = ""
++
++    return new_cmd
++
++
+ if __name__ == "__main__":
+     # Command line options
+     parser = argparse.ArgumentParser(
+@@ -2305,6 +2342,11 @@ if __name__ == "__main__":
+                     # vtysh -f that file. See the next comment for an explanation
+                     # of their quirks
+                     cmd = lines_to_config(ctx_keys, line, True)
++
++                    if len(cmd) > 1:
++                        vyos_cmd = vyos_no_isis_processing(cmd[1])
++                        cmd[1] = vyos_cmd
++
+                     original_cmd = cmd
+ 
+                     # Some commands in frr are picky about taking a "no" of the entire line.
+-- 
+2.43.0
+
